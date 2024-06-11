@@ -1,6 +1,7 @@
 
 window.onload = function () {
 
+    // Attach the event listener to the squares and mic symbols
     let txObjs = document.getElementsByClassName("txIconDiv");
     attachEventListeners(txObjs);
     let rxObjs = document.getElementsByClassName("channelGridTd");

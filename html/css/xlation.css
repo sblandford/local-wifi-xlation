@@ -1,11 +1,24 @@
+.titleBar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 7vh;
+    width: 100vw;
+    color: white;
+    background-color: black;
+    font-size: 2vh;
+}
+
 .channelGridTable {
 	position: absolute;
-	top: 0;
+	top: 7vh;
 	bottom: 0;
 	left: 0;
 	right: 0;
-	height: 100%;
-	width: 100%;
+	height: 93vh;
+	width: 100vw;
     text-align: center;
     background-color: black;
 }
@@ -17,6 +30,7 @@
     border-bottom-width: 1vh;
     color: white;
     font-size: 10em;
+    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
 }
 .channelGridTdActive {
     background-image: radial-gradient(green, black);
