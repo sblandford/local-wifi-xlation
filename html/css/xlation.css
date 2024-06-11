@@ -7,7 +7,7 @@
 	height: 100%;
 	width: 100%;
     text-align: center;
-    background-color: lightblue;
+    background-color: black;
 }
 .channelGridTd {
     border: solid darkcyan;
@@ -15,6 +15,31 @@
     border-right-width: 1vw;
     border-top-width: 1vh;
     border-bottom-width: 1vh;
-    color: black;
+    color: white;
     font-size: 10em;
+}
+.channelGridTdActive {
+    background-image: radial-gradient(green, black);
+}
+.channelGridTdPlaying {
+    background-image: radial-gradient(lightgreen, darkgreen);
+}
+.channelGridTdSending {
+    background-image: radial-gradient(tomato, darkred);
+}
+.channelGridTdWaiting {
+    background-image: radial-gradient(goldenrod, black);
+}
+.txIconDiv {
+    position: absolute;
+    height: 15vh;
+    /* visibility: hidden; */
+}
+.txIconImg {
+    width: 10vw;
+    height: 15vh;
+    -webkit-filter: invert(1);
+    filter: invert(1);
+    display: block;
+    border: none;
 }
