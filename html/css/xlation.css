@@ -1,0 +1,20 @@
+.channelGridTable {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 100%;
+	width: 100%;
+    text-align: center;
+    background-color: lightblue;
+}
+.channelGridTd {
+    border: solid darkcyan;
+    border-left-width: 1vw;
+    border-right-width: 1vw;
+    border-top-width: 1vh;
+    border-bottom-width: 1vh;
+    color: black;
+    font-size: 10em;
+}
