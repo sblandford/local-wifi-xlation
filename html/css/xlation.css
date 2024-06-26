@@ -57,3 +57,6 @@
     display: block;
     border: none;
 }
+.audioPlayerDiv {
+    visibility: hidden;
+}

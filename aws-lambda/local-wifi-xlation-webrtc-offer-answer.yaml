@@ -25,6 +25,7 @@ Resources:
         Variables:
           ELASTICACHE_PORT: '11211'
           ELASTICACHE_TIMEOUT: '300'
+          ELASTICACHE_LOCK_TIMEOUT: '2'
           ELASTICACHE_URL: >-
             <Elasticache URL>.serverless.euw2.cache.amazonaws.com
       EventInvokeConfig:
