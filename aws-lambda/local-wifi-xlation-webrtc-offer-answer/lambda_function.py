@@ -1,4 +1,3 @@
-import json
 import os
 import uuid
 import ssl
@@ -41,6 +40,8 @@ def lambda_handler(event, context):
         channel = event['queryStringParameters']['chan']
 
         if 'status' in event['queryStringParameters']:
+            # The status is shared with the sender and all clients in a channel
+            # It is locked between reading and writing back to ensure integrity
             if not 'lock' in event['queryStringParameters']:
                 status_code = 400
                 raise Exception("Required 'lock' query parameter not specified with status")
@@ -51,12 +52,17 @@ def lambda_handler(event, context):
                 raise Exception("'lock' query parameter is not a valid UUID")
             result = memcached_client.get(key + 'lock')
             if result is not None and result.decode("utf-8") != lock:
-                status_code = 400
+                status_code = 200
                 status_headline = 'LOCKED'
                 raise Exception("'lock' query parameter is not the same UUID as lock requestor")
             # Create a lock to prevent other clients of messing with the status until it is written back or times out
             memcached_client.set(key + 'lock', lock, expire=int(os.environ['ELASTICACHE_LOCK_TIMEOUT']), noreply=False)
         else:
+            # The key is made up of:
+            #   chan : The translation channel number
+            #   client: A client number from a pool allocated by the TX for that channel
+            #   direction: One of "offer" or "answer"
+            #   ip : The discovered IP address of the client/sender
             if not 'client' in event['queryStringParameters']:
                 status_code = 400
                 raise Exception("Required 'client' query parameter not specified")
@@ -69,22 +75,23 @@ def lambda_handler(event, context):
             key = str(channel) + '_' + str(client) + '_' + str(direction) + '_' + ip
 
         if http_method == 'POST':
-            request_body = json.loads(event['body'])
+            request_body = event['body']
             memcached_client.set(key, request_body, expire=int(os.environ['ELASTICACHE_TIMEOUT']), noreply=False)
             # Remove the lock on the status
             if 'status' in event['queryStringParameters']:
                 memcached_client.delete(key + 'lock')
-            status_code = 200
             body = '{"status" : "OK", "key" : "' + key + '", "message" : ""}'
+            status_code = 200
         elif http_method == 'GET':
             result = memcached_client.get(key)
             if result is None:
-                status_code = 200
                 body = '{"status" : "MISS", "key" : "' + key + '", "message" : ""}'
+                status_code = 200
             else:
                 decoded_result = result.decode("utf-8")
+                # str(decoded_result) result already is surrounded in double-quotes
+                body = '{"status" : "OK", "key" : "' + key + '", "message" : ' + str(decoded_result) + '}'
                 status_code = 200
-                body = '{"status" : "OK", "key" : "' + key + '", "message" : "' + str(decoded_result) + '"}'
         else:
             status_code = 400
             body = '{"status" : "FAIL", "key" : "' + key + '", "message" : "Request must be POST or GET"}'
