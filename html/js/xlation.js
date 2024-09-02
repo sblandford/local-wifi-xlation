@@ -5,13 +5,13 @@ const gUuid = uuidv4();
 const gStatusAttempts = 10;
 let gStatusCounter = gStatusAttempts;
 const gStatusAttemptDelayMs = 1000;
-const gMaxClients = 20;
+const gMaxClients = 3;
+let gLastLockedChan = 0;
 
 const xlationClient = Array(gNumChans).fill({
     "rxpc": {},
-    "txpc": {},
-    "offer": Array(gMaxClients).fill({}),
-    "answer": {}
+    "txpcs": Array(gMaxClients).fill({}),
+    "rxpc": {}
 });
 
 const xlationStatus = Array(gNumChans).fill({
@@ -39,8 +39,12 @@ window.onload = function () {
     
 }
 
+
+
 function errHandler(err) {
     console.log(err);
+    // Unlock any lock
+    fetch_status(gLastLockedChan, true);
 }
 
 function uuidv4() {
@@ -128,6 +132,21 @@ async function push_json(url, data) {
     }
 }
 
+async function fetch_sdp(chan, client, direction) {
+    const statUrl = gCacheUrl + "?chan=" + chan + "&client=" + client + "&direction=" + direction;
+    const xlationOffer = await fetch_json(statUrl);
+    let sdp;
+    if (!xlationOffer || !xlationOffer.status) {
+        throw new Error('Expected status not found');
+    }
+    if (xlationOffer.status !== "OK") {
+        console.warn("Unable to fetch SDP for channel:", chan, ", client :", client, ", direction:", direction);
+    } else {
+        sdp = JSON.parse(atob(xlationOffer.message));
+    }
+    return sdp;
+}
+
 async function push_sdp(chan, client, direction, sdp) {
     const statUrl = gCacheUrl + "?chan=" + chan + "&client=" + client + "&direction=" + direction;
     const newXlationStatus = await push_json(statUrl, btoa(JSON.stringify(sdp)));
@@ -139,8 +158,8 @@ async function push_sdp(chan, client, direction, sdp) {
     }
 }
 
-async function fetch_status(chan) {
-    const statUrl = gCacheUrl + "?status&chan=" + chan + "&lock=" + gUuid;
+async function fetch_status(chan, unlock = false) {
+    const statUrl = gCacheUrl + "?status&chan=" + chan + "&lock=" + gUuid + ((unlock)?"&unlock":"");
     // const ipv4 = await fetch_json('http://nginxaws.bkwsu.eu/videojs/php/ip.php');
     // console.log(ipv4);
     const newXlationStatus = await fetch_json(statUrl);
@@ -157,13 +176,18 @@ async function fetch_status(chan) {
         if (gStatusCounter-- > 0) {
             await timeout(gStatusAttemptDelayMs);
             console.log('Fetch status locked, retrying');
-            await fetch_status(chan);
+            await fetch_status(chan, unlock);
         } else {
             throw new Error('Fetch lock timed out after ' + gStatusAttempts + ' attempts');
         }
     } else {
         gStatusCounter = gStatusAttempts;
         xlationStatus[chan] = JSON.parse(atob(newXlationStatus.message));
+        if (unlock) {
+            console.log("Cancelled lock");
+        } else {
+            gLastLockedChan = chan;
+        }
     }
 }
 
@@ -214,7 +238,7 @@ async function tx(chan, client = 0) {
 
                         await push_sdp(chan, client, "offer", pc.localDescription);
                         xlationStatus[chan].available.push(client);
-                        xlationClient[chan][client] = pc;
+                        xlationClient[chan].txpcs[client] = pc;
                         if (client < (gMaxClients - 1)) {
                             await tx(chan, ++client);
                         } else {
@@ -227,9 +251,55 @@ async function tx(chan, client = 0) {
                 console.log('setLocalDescription ok');
             }).catch(errHandler);
         }).catch(errHandler);
+    } else {
+        await push_status(chan);
     }
 }
 
-function rx(chan) {
+async function rx(chan) {
+    console.log('Fetching status');
+    await fetch_status(chan);
+    if (xlationStatus[chan].tx) {
+        let client = xlationStatus[chan].available.shift();
+        xlationStatus[chan].consumed.push(client);
+        console.log('Get an offer for client :', client);
+        let offer = await fetch_sdp(chan, client, "offer");
+        let pc = new RTCPeerConnection({});
+        navigator.mediaDevices.getUserMedia({ audio: false, video: false }).then(stream => {
+            pc.addStream(stream);
+        }).catch(errHandler);
+        pc.onconnection = function(e) {
+            console.log('onconnection ', e);
+        }        
+        pc.setRemoteDescription(offer).then(des => {
+        console.log('createOffer ok ');
+        // Just copy/pasted from tx, needs adapting to rx
+        pc.setLocalDescription(des).then(() => {
+            setTimeout(async function() {
+                if (pc.iceGatheringState === "complete") {
+                    console.log('Complete');
+                    return;
+                } else {
 
+                    await push_sdp(chan, client, "offer", pc.localDescription);
+                    xlationStatus[chan].available.push(client);
+                    xlationClient[chan].txpcs[client] = pc;
+                    if (client < (gMaxClients - 1)) {
+                        await tx(chan, ++client);
+                    } else {
+                        console.log('Writing status');
+                        xlationStatus[chan].tx = true;
+                        await push_status(chan);
+                    }
+                }
+            }, 200);
+            console.log('setLocalDescription ok');
+        }).catch(errHandler);
+    }).catch(errHandler);            
+        
+        
+        
+    }
+    console.log('Writing status');
+    await push_status(chan);
 }

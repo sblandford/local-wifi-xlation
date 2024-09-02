@@ -32,7 +32,7 @@ def lambda_handler(event, context):
 
         if not 'queryStringParameters' in event:
             status_code = 400
-            raise Exception("No query parameters: 'status', 'lock', 'chan', 'client' or 'direction'")
+            raise Exception("No query parameters: 'status', 'lock', 'unlock', 'chan', 'client' or 'direction'")
 
         if not 'chan' in event['queryStringParameters']:
             status_code = 400
@@ -55,8 +55,11 @@ def lambda_handler(event, context):
                 status_code = 200
                 status_headline = 'LOCKED'
                 raise Exception("'lock' query parameter is not the same UUID as lock requestor")
-            # Create a lock to prevent other clients of messing with the status until it is written back or times out
-            memcached_client.set(key + 'lock', lock, expire=int(os.environ['ELASTICACHE_LOCK_TIMEOUT']), noreply=False)
+            if 'unlock' in event['queryStringParameters'] and http_method == 'GET':
+                memcached_client.delete(key + 'lock')
+            else:
+                # Create a lock to prevent other clients of messing with the status until it is written back or times out
+                memcached_client.set(key + 'lock', lock, expire=int(os.environ['ELASTICACHE_LOCK_TIMEOUT']), noreply=False)
         else:
             # The key is made up of:
             #   chan : The translation channel number
