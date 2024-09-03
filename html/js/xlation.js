@@ -11,7 +11,6 @@ let gLastLockedChan = 0;
 const xlationClient = Array(gNumChans).fill({
     "rxpc": {},
     "txpcs": Array(gMaxClients).fill({}),
-    "rxpc": {}
 });
 
 const xlationStatus = Array(gNumChans).fill({
@@ -159,6 +158,7 @@ async function push_sdp(chan, client, direction, sdp) {
 }
 
 async function fetch_status(chan, unlock = false) {
+    console.log("Fetching status");
     const statUrl = gCacheUrl + "?status&chan=" + chan + "&lock=" + gUuid + ((unlock)?"&unlock":"");
     // const ipv4 = await fetch_json('http://nginxaws.bkwsu.eu/videojs/php/ip.php');
     // console.log(ipv4);
@@ -194,6 +194,7 @@ async function fetch_status(chan, unlock = false) {
 
 async function push_status(chan) {
     const statUrl = gCacheUrl + "?status&chan=" + chan + "&lock=" + gUuid;
+    console.log("Pushing status");
     const newXlationStatus = await push_json(statUrl, btoa(JSON.stringify(xlationStatus[chan])));
     if (!newXlationStatus || !newXlationStatus.status) {
         throw new Error('Expect status not found');
@@ -214,7 +215,6 @@ async function push_status(chan) {
 
 async function tx(chan, client = 0) {
     if (client == 0) {
-        console.log('Fetching status');
         await fetch_status(chan);
     }
     if (!xlationStatus[chan].tx) {
@@ -242,7 +242,6 @@ async function tx(chan, client = 0) {
                         if (client < (gMaxClients - 1)) {
                             await tx(chan, ++client);
                         } else {
-                            console.log('Writing status');
                             xlationStatus[chan].tx = true;
                             await push_status(chan);
                         }
@@ -257,49 +256,37 @@ async function tx(chan, client = 0) {
 }
 
 async function rx(chan) {
-    console.log('Fetching status');
     await fetch_status(chan);
     if (xlationStatus[chan].tx) {
         let client = xlationStatus[chan].available.shift();
         xlationStatus[chan].consumed.push(client);
         console.log('Get an offer for client :', client);
         let offer = await fetch_sdp(chan, client, "offer");
+        let remoteOffer = new RTCSessionDescription(offer);
         let pc = new RTCPeerConnection({});
-        navigator.mediaDevices.getUserMedia({ audio: false, video: false }).then(stream => {
-            pc.addStream(stream);
-        }).catch(errHandler);
+        xlationClient[chan].rxpc = pc;
         pc.onconnection = function(e) {
             console.log('onconnection ', e);
         }        
-        pc.setRemoteDescription(offer).then(des => {
-        console.log('createOffer ok ');
-        // Just copy/pasted from tx, needs adapting to rx
-        pc.setLocalDescription(des).then(() => {
-            setTimeout(async function() {
-                if (pc.iceGatheringState === "complete") {
-                    console.log('Complete');
-                    return;
-                } else {
-
-                    await push_sdp(chan, client, "offer", pc.localDescription);
-                    xlationStatus[chan].available.push(client);
-                    xlationClient[chan].txpcs[client] = pc;
-                    if (client < (gMaxClients - 1)) {
-                        await tx(chan, ++client);
-                    } else {
-                        console.log('Writing status');
-                        xlationStatus[chan].tx = true;
-                        await push_status(chan);
-                    }
-                }
-            }, 200);
-            console.log('setLocalDescription ok');
+        pc.setRemoteDescription(remoteOffer).then(() => {
+            console.log('injestOffer ok ');
+            pc.createAnswer().then(des => {
+                pc.setLocalDescription(des).then(() => {
+                    console.log('createAnswer ok');
+                    setTimeout(async function() {
+                        if (pc.iceGatheringState === "complete") {
+                            console.log('Complete');
+                            return;
+                        } else {
+                            await push_sdp(chan, client, "answer", pc.localDescription);
+                            await push_status(chan);
+                        }
+                    }, 200);
+                    console.log('setLocalDescription ok');
+                }).catch(errHandler);
+            }).catch(errHandler);
         }).catch(errHandler);
-    }).catch(errHandler);            
-        
-        
-        
+    } else {
+        await push_status(chan);
     }
-    console.log('Writing status');
-    await push_status(chan);
 }
