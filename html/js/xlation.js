@@ -1,5 +1,6 @@
 const gNumChans = 6;
 const gCacheUrl = "https://6n2b4yjwl3y4ztk24wppxfrkvm0zrqtv.lambda-url.eu-west-2.on.aws/";
+const gWsUrl = "wss://1nmyiy6gb9.execute-api.eu-west-2.amazonaws.com/production/";
 // Generate a random UUID for status locking
 const gUuid = uuidv4();
 const gStatusAttempts = 10;
